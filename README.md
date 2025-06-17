@@ -1,2 +1,230 @@
-# rs-daily-tracker
-Rs3 Dailys/weekly
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>RuneScape Daily & Weekly Tracker</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 600px;
+      margin: 20px auto;
+      padding: 20px;
+      background-color: #f0f0f0;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.2);
+    }
+    h2 {
+      text-align: center;
+    }
+    .task {
+      margin-bottom: 10px;
+    }
+    .reset-button, .download-button {
+      display: block;
+      margin: 20px auto;
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    #timer, #weekly-timer {
+      text-align: center;
+      font-weight: bold;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <h2>RuneScape Daily Tracker</h2>
+  <div id="tasks"></div>
+
+  <h2>Weeklies</h2>
+  <div id="weeklies"></div>
+
+  <button class="reset-button" onclick="manualReset()">Manuell Reset (Daily)</button>
+  <button class="reset-button" onclick="manualWeeklyReset()">Manuell Reset (Weekly)</button>
+
+  <div id="timer">Laddar daglig timer...</div>
+  <div id="weekly-timer">Laddar weekly timer...</div>
+
+  <button class="download-button" onclick="downloadHTML()">Ladda ner HTML</button>
+
+  <script>
+    // ... (Din befintliga JavaScript-kod här, exakt som du skrev)
+
+    // Kopiera här hela din befintliga JavaScript från originalet:
+    const DAILY_TASKS = [
+      "Broad arrowtips",
+      "Mine priff and oologo flasks",
+      "Daily challenges",
+      "Vis wax",
+      "Daily herb run and PoF (Ardougne > Camelot > Falador > Mort > Al Kharid)",
+      "Daily rune shop (Lunar > Yanille > Wildy > Archenia)",
+      "Buy bloodweed seed",
+      "Daily free supply from Um",
+      "Port buy daily supplies",
+      "Daily boat",
+      "Fremennik yak fur",
+      "2x Mark of the Trades",
+      "1 hour daily Premier Club Reward"
+    ];
+
+    const WEEKLY_TASKS = [
+      "Hide and Seek Penguins x2",
+      "Herby Werby",
+      "Meg",
+      "Harmunds in Um every Wednesday",
+      "Tears of Guthix",
+      "Agoroth"
+    ];
+
+    const STORAGE_KEY = 'rs_dailies';
+    const WEEKLY_STORAGE_KEY = 'rs_weeklies';
+
+    function getNextResetTime() {
+      const now = new Date();
+      const reset = new Date();
+      reset.setUTCHours(0, 0, 0, 0);
+      if (now > reset) {
+        reset.setUTCDate(reset.getUTCDate() + 1);
+      }
+      return reset.getTime();
+    }
+
+    function getNextWednesdayReset() {
+      const now = new Date();
+      const reset = new Date();
+      reset.setUTCHours(0, 0, 0, 0);
+      const day = reset.getUTCDay();
+      const daysUntilWednesday = (3 - day + 7) % 7 || 7;
+      reset.setUTCDate(reset.getUTCDate() + daysUntilWednesday);
+      return reset.getTime();
+    }
+
+    function loadStatus(key, resetTimeFunc) {
+      const data = JSON.parse(localStorage.getItem(key)) || {
+        checked: [],
+        lastReset: 0
+      };
+
+      if (Date.now() > resetTimeFunc()) {
+        data.checked = [];
+        data.lastReset = Date.now();
+      }
+
+      return data;
+    }
+
+    function saveStatus(key, status) {
+      localStorage.setItem(key, JSON.stringify(status));
+    }
+
+    function renderTasks(containerId, tasks, status, toggleFunc) {
+      const container = document.getElementById(containerId);
+      container.innerHTML = '';
+
+      tasks.forEach((task, index) => {
+        const div = document.createElement('div');
+        div.className = 'task';
+
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.id = `${containerId}-${index}`;
+        checkbox.checked = status.checked.includes(index);
+        checkbox.addEventListener('change', () => toggleFunc(index));
+
+        const label = document.createElement('label');
+        label.htmlFor = `${containerId}-${index}`;
+        label.textContent = task;
+
+        div.appendChild(checkbox);
+        div.appendChild(label);
+        container.appendChild(div);
+      });
+    }
+
+    function toggleDaily(index) {
+      if (dailyStatus.checked.includes(index)) {
+        dailyStatus.checked = dailyStatus.checked.filter(i => i !== index);
+      } else {
+        dailyStatus.checked.push(index);
+      }
+      saveStatus(STORAGE_KEY, dailyStatus);
+    }
+
+    function toggleWeekly(index) {
+      if (weeklyStatus.checked.includes(index)) {
+        weeklyStatus.checked = weeklyStatus.checked.filter(i => i !== index);
+      } else {
+        weeklyStatus.checked.push(index);
+      }
+      saveStatus(WEEKLY_STORAGE_KEY, weeklyStatus);
+    }
+
+    function manualReset() {
+      if (confirm("Vill du verkligen återställa den dagliga listan?")) {
+        dailyStatus.checked = [];
+        dailyStatus.lastReset = Date.now();
+        saveStatus(STORAGE_KEY, dailyStatus);
+        renderTasks('tasks', DAILY_TASKS, dailyStatus, toggleDaily);
+      }
+    }
+
+    function manualWeeklyReset() {
+      if (confirm("Vill du verkligen återställa veckolistan?")) {
+        weeklyStatus.checked = [];
+        weeklyStatus.lastReset = Date.now();
+        saveStatus(WEEKLY_STORAGE_KEY, weeklyStatus);
+        renderTasks('weeklies', WEEKLY_TASKS, weeklyStatus, toggleWeekly);
+      }
+    }
+
+    function updateTimer(elementId, resetTimeFunc, status, tasks, toggleFunc, containerId) {
+      const timerDiv = document.getElementById(elementId);
+      const nextReset = new Date(resetTimeFunc());
+      const now = new Date();
+      const diff = nextReset - now;
+
+      if (diff <= 0) {
+        status.checked = [];
+        status.lastReset = Date.now();
+        saveStatus(containerId === 'tasks' ? STORAGE_KEY : WEEKLY_STORAGE_KEY, status);
+        renderTasks(containerId, tasks, status, toggleFunc);
+      }
+
+      const hours = Math.floor(diff / 3600000);
+      const minutes = Math.floor((diff % 3600000) / 60000);
+      const seconds = Math.floor((diff % 60000) / 1000);
+      timerDiv.textContent = `Återställs om: ${hours}h ${minutes}m ${seconds}s`;
+
+      setTimeout(() => updateTimer(elementId, resetTimeFunc, status, tasks, toggleFunc, containerId), 1000);
+    }
+
+    const dailyStatus = loadStatus(STORAGE_KEY, getNextResetTime);
+    const weeklyStatus = loadStatus(WEEKLY_STORAGE_KEY, getNextWednesdayReset);
+
+    renderTasks('tasks', DAILY_TASKS, dailyStatus, toggleDaily);
+    renderTasks('weeklies', WEEKLY_TASKS, weeklyStatus, toggleWeekly);
+
+    updateTimer('timer', getNextResetTime, dailyStatus, DAILY_TASKS, toggleDaily, 'tasks');
+    updateTimer('weekly-timer', getNextWednesdayReset, weeklyStatus, WEEKLY_TASKS, toggleWeekly, 'weeklies');
+
+
+    // Ny funktion för att ladda ner HTML-koden som fil
+    function downloadHTML() {
+      const htmlContent = document.documentElement.outerHTML;
+      const blob = new Blob([htmlContent], {type: 'text/html'});
+      const url = URL.createObjectURL(blob);
+
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'RuneScapeTracker.html';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+
+      URL.revokeObjectURL(url);
+    }
+  </script>
+</body>
+</html>
